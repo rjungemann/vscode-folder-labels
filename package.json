@@ -1,0 +1,121 @@
+{
+  "name": "vscode-folder-labels",
+  "displayName": "Folder Labels",
+  "description": "Display macOS Finder color labels as colored badges in VS Code Explorer",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "os": ["darwin"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "folderLabels.setLabel",
+        "title": "Set Finder Label…",
+        "category": "Folder Labels"
+      },
+      {
+        "command": "folderLabels.clearLabel",
+        "title": "Clear Finder Label",
+        "category": "Folder Labels"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "folderLabels.setLabel",
+          "when": "resourceScheme == file",
+          "group": "1_modification"
+        },
+        {
+          "command": "folderLabels.clearLabel",
+          "when": "resourceScheme == file",
+          "group": "1_modification"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Folder Labels",
+      "properties": {
+        "folderLabels.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the folder labels extension."
+        },
+        "folderLabels.showOnFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Finder labels on files in the Explorer."
+        },
+        "folderLabels.showOnFolders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Finder labels on folders in the Explorer."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "folderLabels.gray",
+        "description": "Color for the Gray Finder label dot",
+        "defaults": { "dark": "#999999", "light": "#888888", "highContrast": "#AAAAAA", "highContrastLight": "#777777" }
+      },
+      {
+        "id": "folderLabels.green",
+        "description": "Color for the Green Finder label dot",
+        "defaults": { "dark": "#4CD964", "light": "#34C759", "highContrast": "#4CD964", "highContrastLight": "#34C759" }
+      },
+      {
+        "id": "folderLabels.purple",
+        "description": "Color for the Purple Finder label dot",
+        "defaults": { "dark": "#9D5CE4", "light": "#8944AB", "highContrast": "#BF80FF", "highContrastLight": "#7928CA" }
+      },
+      {
+        "id": "folderLabels.blue",
+        "description": "Color for the Blue Finder label dot",
+        "defaults": { "dark": "#007AFF", "light": "#007AFF", "highContrast": "#4DA3FF", "highContrastLight": "#0055CC" }
+      },
+      {
+        "id": "folderLabels.yellow",
+        "description": "Color for the Yellow Finder label dot",
+        "defaults": { "dark": "#FFD60A", "light": "#D4AC00", "highContrast": "#FFE566", "highContrastLight": "#B38A00" }
+      },
+      {
+        "id": "folderLabels.red",
+        "description": "Color for the Red Finder label dot",
+        "defaults": { "dark": "#FF3B30", "light": "#FF3B30", "highContrast": "#FF6961", "highContrastLight": "#CC2200" }
+      },
+      {
+        "id": "folderLabels.orange",
+        "description": "Color for the Orange Finder label dot",
+        "defaults": { "dark": "#FF9500", "light": "#E08000", "highContrast": "#FFB340", "highContrastLight": "#C06000" }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.3.0",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {},
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rjungemann/vscode-folder-labels"
+  },
+  "publisher": "rjungemann"
+}
