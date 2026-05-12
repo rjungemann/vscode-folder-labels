@@ -12,6 +12,12 @@ A VS Code extension that displays macOS Finder color labels as colored badges in
 - **Live Updates**: Automatically refreshes when labels are changed externally (e.g., in Finder).
 - **Configurable**: Toggle visibility for files and folders separately.
 
+## Screenshot
+
+![VS Code Explorer showing colored badges next to labeled files](docs/screenshot.png)
+
+The extension displays colored `●` badges next to files and folders that have Finder labels. Each color corresponds to the standard macOS Finder label colors.
+
 ## Requirements
 
 - **macOS only**: This extension only works on macOS due to its reliance on Finder's extended attributes.
@@ -66,6 +72,49 @@ The 7 standard Finder label colors are mapped to the following color indices:
 | Yellow | 5     |
 | Red    | 6     |
 | Orange | 7     |
+
+## Architecture
+
+### Reading Labels (Three-Layer Fallback)
+
+The extension uses a three-layer architecture to read Finder labels with graceful degradation:
+
+1. **Layer 1 – Native Extended Attributes** (Recommended)
+   - Reads directly from `com.apple.metadata:_kMDItemUserTags` extended attribute using Node's `xattr` command-line tool
+   - Parses binary plist format (bplist00) using a built-in TypeScript parser
+   - Supports both standard plist format (with offset tables) and Finder's minimal inline format
+   - Fastest and most reliable path
+
+2. **Layer 2 – `tag` CLI Tool** (Optional fallback)
+   - Uses the Homebrew `tag` CLI tool if xattr is unavailable
+   - Parses `tag --list` output to extract color information
+   - Slower than native xattr but provides compatibility on systems without xattr
+
+3. **Layer 3 – Graceful Degradation**
+   - If both previous layers fail, the extension continues running without errors
+   - No labels displayed but the extension doesn't crash or impair VS Code
+
+### Writing and Clearing Labels
+
+Setting labels uses the best available method:
+- **Preferred**: Write directly via xattr with properly formatted binary plist
+- **Fallback**: Use the `tag` CLI tool to set labels
+- Both methods preserve existing non-color tags on files
+
+### Performance Optimizations
+
+- **Caching**: Labels are cached for 5 seconds per file to minimize filesystem calls
+- **Pending Deduplication**: Multiple concurrent requests for the same file are batched into a single read
+- **Selective Preloading**: The extension preloads visible files when the Explorer loads to provide immediate feedback
+- **File System Watcher**: External changes to extended attributes are detected and refresh the display
+
+### Binary Plist Parsing
+
+The extension includes a complete TypeScript-based binary plist parser (`src/bplist.ts`) that:
+- Parses both standard and minimal plist formats
+- Handles inline object references for Finder's compressed format
+- Builds valid binary plist output when writing labels
+- Requires no external dependencies or subprocess calls
 
 ## Limitations
 
@@ -147,6 +196,19 @@ In the Extension Development Host window, open **Output** (`Cmd+Shift+U`) and se
 ```bash
 npm run lint
 ```
+
+## Status
+
+✅ **All core features are implemented and working:**
+- ✅ Display Finder labels as colored badges in VS Code Explorer
+- ✅ Set labels via context menu or Command Palette with color picker
+- ✅ Clear labels via context menu or Command Palette
+- ✅ Live updates when external label changes are detected
+- ✅ Configuration support for files and folders visibility
+- ✅ Three-layer fallback architecture (native xattr → tag CLI → graceful degradation)
+- ✅ TypeScript binary plist parser supporting both standard and minimal formats
+- ✅ Comprehensive caching and performance optimizations
+- ✅ Clean TypeScript compilation (zero errors/warnings)
 
 ## Release Notes
 
