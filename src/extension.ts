@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { LabelDecorationProvider } from './labelProvider';
 import { Commands } from './commands';
+import { disposeHelperClient } from './labelManager';
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Folder Labels extension is now active!');
@@ -25,6 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  disposeHelperClient();
   console.log('Folder Labels extension is now inactive!');
 }
 

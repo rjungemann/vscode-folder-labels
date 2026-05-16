@@ -3,8 +3,25 @@ import { promisify } from 'util';
 import * as vscode from 'vscode';
 import { ColorIndex, LABEL_COLORS, XATTR_TAGS } from './types';
 import { parseStringArray, buildStringArray } from './bplist';
+import { HelperClient } from './helperClient';
 
 const execFileAsync = promisify(execFile);
+
+// ---------------------------------------------------------------------------
+// Layer 0 — Native helper daemon (Swift binary, no subprocess per call)
+// ---------------------------------------------------------------------------
+
+let _helperClient: HelperClient | null = null;
+
+function getHelperClient(): HelperClient {
+  if (!_helperClient) { _helperClient = new HelperClient(); }
+  return _helperClient;
+}
+
+export function disposeHelperClient(): void {
+  _helperClient?.dispose();
+  _helperClient = null;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -233,33 +250,27 @@ async function clearLabelViaTag(filePath: string): Promise<boolean> {
  * Read the Finder label color index for a file.
  *
  * Priority:
+ *   0. Helper daemon (Swift binary, getxattr syscall — no subprocess per call)
  *   1. Native: xattr -p (raw Buffer) → TypeScript bplist parser  [no external deps]
  *   2. Fallback: tag CLI (`brew install tag`)
  */
 export async function readLabel(filePath: string): Promise<ColorIndex | undefined> {
-  console.debug(`[Folder Labels] readLabel called for: ${filePath}`);
-  try {
-    const result = await readLabelNative(filePath);
-    console.debug(`[Folder Labels] readLabelNative returned ${result} for ${filePath}`);
-    return result;
-  } catch (err) {
-    // xattr binary unavailable — fall through.
-    console.debug(`[Folder Labels] readLabelNative not available for ${filePath}, trying tag CLI:`, err);
+  const helper = getHelperClient();
+  if (helper.available) {
+    try {
+      return await helper.read(filePath);
+    } catch { /* fall through */ }
   }
 
+  try {
+    return await readLabelNative(filePath);
+  } catch { /* xattr binary unavailable — fall through */ }
+
   if (await checkTagCLI()) {
-    try {
-      const result = await readLabelViaTag(filePath);
-      console.debug(`[Folder Labels] readLabelViaTag returned ${result} for ${filePath}`);
-      return result;
-    } catch (err) {
-      console.debug(`[Folder Labels] readLabelViaTag failed for ${filePath}:`, err);
-    }
+    try { return await readLabelViaTag(filePath); } catch { /* ignore */ }
   } else {
     showTagWarning();
   }
-
-  console.debug(`[Folder Labels] readLabel returning undefined for ${filePath}`);
   return undefined;
 }
 
@@ -267,6 +278,7 @@ export async function readLabel(filePath: string): Promise<ColorIndex | undefine
  * Write a Finder label color to a file.
  *
  * Priority:
+ *   0. Helper daemon (Swift binary)
  *   1. Native: build bplist in TypeScript → xattr -wx
  *   2. Fallback: tag CLI
  */
@@ -275,17 +287,22 @@ export async function writeLabel(filePath: string, colorIndex: ColorIndex): Prom
     return clearLabel(filePath);
   }
 
+  const helper = getHelperClient();
+  if (helper.available) {
+    try {
+      await helper.write(filePath, colorIndex);
+      return true;
+    } catch { /* fall through */ }
+  }
+
   try {
     return await writeLabelNative(filePath, colorIndex);
-  } catch (err) {
-    console.debug(`Folder Labels: writeLabelNative failed for ${filePath}:`, err);
-  }
+  } catch { /* fall through */ }
 
   if (await checkTagCLI()) {
     try {
       return await writeLabelViaTag(filePath, colorIndex);
     } catch (err) {
-      console.error(`Folder Labels: writeLabelViaTag failed for ${filePath}:`, err);
       vscode.window.showErrorMessage(`Failed to set label: ${err}`);
     }
   } else {
@@ -301,37 +318,49 @@ export async function writeLabel(filePath: string, colorIndex: ColorIndex): Prom
  * Clear all Finder color labels from a file.
  *
  * Priority:
+ *   0. Helper daemon (Swift binary)
  *   1. Native: remove color tags from bplist → xattr -wx (or xattr -d if no tags remain)
  *   2. Fallback: tag CLI
  */
 export async function clearLabel(filePath: string): Promise<boolean> {
-  try {
-    return await clearLabelNative(filePath);
-  } catch (err) {
-    console.debug(`Folder Labels: clearLabelNative failed for ${filePath}:`, err);
+  const helper = getHelperClient();
+  if (helper.available) {
+    try {
+      await helper.clear(filePath);
+      return true;
+    } catch { /* fall through */ }
   }
 
+  try {
+    return await clearLabelNative(filePath);
+  } catch { /* fall through */ }
+
   if (await checkTagCLI()) {
-    try {
-      return await clearLabelViaTag(filePath);
-    } catch (err) {
-      console.error(`Folder Labels: clearLabelViaTag failed for ${filePath}:`, err);
-    }
+    try { return await clearLabelViaTag(filePath); } catch { /* ignore */ }
   }
   return false;
 }
 
 /**
- * Batch-read labels for multiple files (runs in parallel).
+ * Batch-read labels for multiple files.
+ * Uses the helper daemon for a single round-trip when available;
+ * falls back to concurrent individual reads otherwise.
  */
 export async function readLabels(filePaths: string[]): Promise<Map<string, ColorIndex>> {
+  if (filePaths.length === 0) { return new Map(); }
+
+  const helper = getHelperClient();
+  if (helper.available) {
+    try {
+      return await helper.readBatch(filePaths);
+    } catch { /* fall through */ }
+  }
+
   const results = new Map<string, ColorIndex>();
   await Promise.all(
     filePaths.map(async (filePath) => {
       const label = await readLabel(filePath);
-      if (label !== undefined) {
-        results.set(filePath, label);
-      }
+      if (label !== undefined) { results.set(filePath, label); }
     }),
   );
   return results;

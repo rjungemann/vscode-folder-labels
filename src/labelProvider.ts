@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ColorIndex, LABEL_COLORS, COLOR_THEME_MAP, BADGE_CHAR } from './types';
-import { readLabel } from './labelManager';
+import { readLabel, readLabels } from './labelManager';
 
 // Type for the color in FileDecoration - can be ThemeColor or string
 
@@ -226,32 +226,19 @@ export class LabelDecorationProvider implements vscode.FileDecorationProvider {
   }
 
   /**
-   * Pre-load labels for a set of URIs (for performance)
+   * Pre-load labels for a set of URIs using a single batch request.
    */
   async preloadLabels(uris: readonly vscode.Uri[]): Promise<void> {
-    const filePaths = uris.map(u => u.fsPath);
-    
-    // Filter out already cached or pending
-    const toLoad = filePaths.filter(fp => !labelCache.has(fp) && !pendingReads.has(fp));
-    
-    if (toLoad.length === 0) {
-      return;
+    const toLoad = uris
+      .map(u => u.fsPath)
+      .filter(fp => !labelCache.has(fp) && !pendingReads.has(fp));
+
+    if (toLoad.length === 0) { return; }
+
+    const labelsMap = await readLabels(toLoad);
+    for (const fp of toLoad) {
+      this.setCachedLabel(fp, labelsMap.get(fp) ?? LABEL_COLORS.None);
     }
-    
-    // Batch read labels
-    const results = await Promise.all(
-      toLoad.map(async (fp) => {
-        const label = await readLabel(fp);
-        return { filePath: fp, label: label ?? LABEL_COLORS.None };
-      })
-    );
-    
-    // Update cache
-    for (const { filePath, label } of results) {
-      this.setCachedLabel(filePath, label);
-    }
-    
-    // Refresh all
     this.refresh();
   }
 }
